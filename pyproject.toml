@@ -3,7 +3,7 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pai-framework"
+name = "paigent"
 version = "0.1.0"
 description = "Proactive AI Framework — event-driven, governed proactive agents with a GGUF-like .pai container format and self-finetuning"
 readme = "README.md"

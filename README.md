@@ -4,6 +4,12 @@
 
 核心理念：從「被動式 AI（你下指令它才做事）」轉為「事件驅動 + 持續感知 + 受治理的主動行為」。
 
+## 安裝
+
+```bash
+pip install paigent          # PyPI 發佈名為 paigent；import 仍是 `import pai`，CLI 仍是 `pai`
+```
+
 ## 預打包的 .pai agent（Hugging Face）
 
 | 模型頁 | 決策腦 | 說明 |
