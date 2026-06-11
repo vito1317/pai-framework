@@ -1,0 +1,13 @@
+# 模型權重與打包產物（請從 Hugging Face 取得）
+models/
+*.pai
+*.gguf
+
+# 執行期產物
+*.db
+*.log
+watched/
+archive/
+__pycache__/
+*.pyc
+.DS_Store
