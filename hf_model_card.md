@@ -73,6 +73,11 @@ python3 -m pai run  gemma-guardian.pai
 > **不是每個事件都要等 35 秒**：採 rule-first 雙層觸發——`RuleBrain`（前線哨兵）即時、零成本
 > 過濾大多數事件，只有規則判定值得深入時才喚醒 Gemma 4 做開放式判斷，那一次才約 35s。
 
+## 相關連結
+
+- 框架原始碼：[github.com/vito1317/pai-framework](https://github.com/vito1317/pai-framework)
+- 全雙工 omni 版本：[vito95311/minicpm-o-guardian-pai](https://huggingface.co/vito95311/minicpm-o-guardian-pai)（MiniCPM-o 4.5）
+
 ## License
 
 框架：MIT。內嵌權重：apache-2.0（Google Gemma 4）。

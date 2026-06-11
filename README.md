@@ -4,6 +4,13 @@
 
 核心理念：從「被動式 AI（你下指令它才做事）」轉為「事件驅動 + 持續感知 + 受治理的主動行為」。
 
+## 預打包的 .pai agent（Hugging Face）
+
+| 模型頁 | 決策腦 | 說明 |
+|---|---|---|
+| [vito95311/gemma-guardian-pai](https://huggingface.co/vito95311/gemma-guardian-pai) | Gemma 4 26B-A4B（QAT q4_0，內嵌 14.4GB GGUF） | 離線 guardian：CPU 監控→清理、新檔案→自動歸檔 |
+| [vito95311/minicpm-o-guardian-pai](https://huggingface.co/vito95311/minicpm-o-guardian-pai) | MiniCPM-o 4.5（全雙工 omni，不內嵌權重） | 即時看＋聽、原生主動互動、語音回應 |
+
 ## 架構
 
 ```
