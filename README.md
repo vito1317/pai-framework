@@ -114,15 +114,32 @@ agent = load_runtime("ops-guardian.pai",
 agent.run()
 ```
 
-## 底層模型（三層選擇，模型無關）
+## 底層模型（模型無關，可插拔決策腦）
 
 | 決策腦 | 底層模型 | 用途 |
 |---|---|---|
 | `RuleBrain` | 無（純規則） | 前線哨兵、離線運行、LLM 的安全 fallback |
 | `LLMBrain` | 雲端 API（預設 `claude-sonnet-4-6`，可換任何模型） | 開放式判斷 |
-| `LocalLLMBrain` | `.pai` 內嵌的 GGUF 權重，經 llama.cpp 推理（`pip install llama-cpp-python`），建議 4B–8B instruct 量化模型 | 完全離線、資料不出機 |
+| `LocalLLMBrain` | `.pai` 內嵌 GGUF，經 `llama-cpp-python` | 完全離線、資料不出機 |
+| `LlamaServerBrain` | `.pai` 內嵌 GGUF，經 llama.cpp `llama-server`（支援 `--lora` 熱載入） | 離線、新架構支援最快、常駐免重載 |
+| `MiniCPMoBrain` | **openbmb/MiniCPM-o-4_5**（全雙工 omni：影像+音訊輸入、文字+語音輸出） | 即時看＋聽現場、原生主動互動、語音回應 |
 
-`brain.json` 決定用哪個；本地權重存在時優先使用，載入失敗自動退回規則腦。
+`brain.json` 的 `engine` 決定用哪個（`llama-server` / `llama-cpp-python` / `minicpm-o`）；
+載入失敗一律自動退回 `RuleBrain`。
+
+### 全雙工語音 / Omni 版本（MiniCPM-o 4.5）
+
+MiniCPM-o 4.5（9B，SigLip2 + Whisper + CosyVoice2 + Qwen3-8B）能同時看、聽、說，
+且**原生支援主動互動**——天然契合 PAI。打包：
+
+```bash
+python3 pack_minicpm_o.py          # 預設不內嵌權重，transformers 從 HF 載入
+```
+
+`DuplexOmniLoop` 把模型的全雙工串流（`streaming_prefill`/`streaming_generate`）包成
+「持續感知 trigger」：模型自己決定何時主動發話，PAI 治理層仍負責是否放行、用什麼等級打擾。
+微調走 `LlamaFactoryBackend`（包 LLaMA-Factory 做 LoRA），其餘 self-finetuning 編排（EvalGate /
+promote / rollback / 稽核）完全沿用。詳見 `pack_minicpm_o.py` 與 `pai/omni_brain.py`。
 
 ## 接上 LLM
 

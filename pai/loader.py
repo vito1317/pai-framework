@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Callable, Optional
 
 from .actions import CallbackAction, ConsoleNotifier, WebhookNotifier
@@ -120,36 +121,48 @@ def load_runtime(
         bj = r.read_json("brain.json")
         if bj.get("type") == "llm":
             avail = list(actions)
-            if prefer_local_weights and "weights.gguf" in r.section_names:
-                # 串流抽取到快取（不會把整個權重讀進 RAM）
+            engine = bj.get("engine", "llama-server")
+            has_weights = prefer_local_weights and "weights.gguf" in r.section_names
+
+            # self-finetuning 第二層：找現役 LoRA adapter（側車優先，其次 .pai 內嵌段）
+            lora_path = None
+            store_root = os.path.join(os.path.dirname(os.path.abspath(memory_path)),
+                                      "pai_adapters")
+            if os.path.exists(os.path.join(store_root, "index.json")):
+                from .finetune import AdapterStore
+                lora_path = AdapterStore(store_root).active_adapter()
+            if lora_path is None and "adapters/active.gguf" in r.section_names:
+                lora_path = r.extract_to_cache("adapters/active.gguf")
+
+            if engine == "minicpm-o":
+                # MiniCPM-o：transformers 路徑從 HF/本地 model_path 載入（不需內嵌 gguf）；
+                # 若有內嵌 weights.gguf 且 omni_engine=llama-server 則用該 gguf
+                from .omni_brain import MiniCPMoBrain
+                model_path = bj.get("model", "openbmb/MiniCPM-o-4_5")
+                if has_weights and bj.get("omni_engine") == "llama-server":
+                    model_path = r.extract_to_cache("weights.gguf")
+                brain = MiniCPMoBrain(
+                    avail, model_path=model_path,
+                    engine=bj.get("omni_engine", "transformers"),
+                    base_url=bj.get("base_url"), device=bj.get("device", "cuda"),
+                    init_audio=bj.get("init_audio", True),
+                    init_tts=bj.get("init_tts", True),
+                    init_vision=bj.get("init_vision", True),
+                    fallback=rule_brain, user_profile=bj.get("user_profile", ""))
+            elif has_weights and engine == "llama-server":
                 weights_path = r.extract_to_cache("weights.gguf")
-                engine = bj.get("engine", "llama-server")
-                # self-finetuning 第二層：找現役 LoRA adapter
-                # 優先側車 AdapterStore（可熱插拔），其次 .pai 內嵌的 adapters/active.gguf
-                lora_path = None
-                store_root = os.path.join(os.path.dirname(os.path.abspath(memory_path)),
-                                          "pai_adapters")
-                if os.path.exists(os.path.join(store_root, "index.json")):
-                    from .finetune import AdapterStore
-                    lora_path = AdapterStore(store_root).active_adapter()
-                if lora_path is None and "adapters/active.gguf" in r.section_names:
-                    lora_path = r.extract_to_cache("adapters/active.gguf")
-                if engine == "llama-server":
-                    from .server_brain import LlamaServerBrain
-                    brain = LlamaServerBrain(
-                        avail, weights_path=weights_path,
-                        base_url=bj.get("base_url"),
-                        port=bj.get("port", 8089),
-                        n_ctx=bj.get("n_ctx", 4096),
-                        lora_path=lora_path,
-                        fallback=rule_brain,
-                        user_profile=bj.get("user_profile", ""))
-                else:  # engine == "llama-cpp-python"
-                    from .local_brain import LocalLLMBrain
-                    brain = LocalLLMBrain(
-                        avail, weights_path=weights_path,
-                        n_ctx=bj.get("n_ctx", 8192),
-                        fallback=rule_brain, user_profile=bj.get("user_profile", ""))
+                from .server_brain import LlamaServerBrain
+                brain = LlamaServerBrain(
+                    avail, weights_path=weights_path, base_url=bj.get("base_url"),
+                    port=bj.get("port", 8089), n_ctx=bj.get("n_ctx", 4096),
+                    lora_path=lora_path, fallback=rule_brain,
+                    user_profile=bj.get("user_profile", ""))
+            elif has_weights:  # engine == "llama-cpp-python"
+                weights_path = r.extract_to_cache("weights.gguf")
+                from .local_brain import LocalLLMBrain
+                brain = LocalLLMBrain(
+                    avail, weights_path=weights_path, n_ctx=bj.get("n_ctx", 8192),
+                    fallback=rule_brain, user_profile=bj.get("user_profile", ""))
             else:
                 brain = LLMBrain(avail, model=bj.get("model", "claude-sonnet-4-6"),
                                  fallback=rule_brain,

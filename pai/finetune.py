@@ -93,6 +93,37 @@ class EchoBackend:
         return out_adapter
 
 
+class LlamaFactoryBackend:
+    """真實後端：包 LLaMA-Factory 對 MiniCPM-o 4.5 做 LoRA 微調。
+
+    MiniCPM-o 官方建議用 LLaMA-Factory 微調。產出的是 PEFT LoRA adapter
+    （safetensors），主幹權重不動。需先 `pip install llamafactory` 並備妥 dataset 設定。
+    """
+
+    def __init__(self, base_model: str = "openbmb/MiniCPM-o-4_5",
+                 template: str = "minicpm_o", extra_args: Optional[dict] = None):
+        self.base_model = base_model
+        self.template = template
+        self.extra_args = extra_args or {}
+
+    def train(self, dataset_jsonl: str, base_gguf: Optional[str], out_adapter: str) -> str:
+        from llamafactory.train.tuner import run_exp  # 延遲匯入
+        args = {
+            "stage": "sft", "do_train": True, "model_name_or_path": self.base_model,
+            "dataset_dir": os.path.dirname(dataset_jsonl) or ".",
+            "dataset": os.path.splitext(os.path.basename(dataset_jsonl))[0],
+            "template": self.template, "finetuning_type": "lora",
+            "lora_target": "all", "output_dir": out_adapter,
+            "overwrite_output_dir": True, "per_device_train_batch_size": 1,
+            "gradient_accumulation_steps": 8, "lr_scheduler_type": "cosine",
+            "learning_rate": 1e-4, "num_train_epochs": 3.0, "bf16": True,
+            **self.extra_args,
+        }
+        logger.info("Running LLaMA-Factory LoRA SFT on %s", self.base_model)
+        run_exp(args)
+        return out_adapter
+
+
 class LlamaFinetuneBackend:
     """真實後端：包 llama.cpp 的 llama-finetune，產生 GGUF 格式 LoRA adapter。
 
