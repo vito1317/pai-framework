@@ -75,8 +75,9 @@ python3 -m pai run  gemma-guardian.pai
 
 ## 相關連結
 
-- 框架原始碼：[github.com/vito1317/pai-framework](https://github.com/vito1317/pai-framework)
-- 全雙工 omni 版本：[vito95311/minicpm-o-guardian-pai](https://huggingface.co/vito95311/minicpm-o-guardian-pai)（MiniCPM-o 4.5）
+- 框架原始碼：[github.com/vito1317/pai-framework](https://github.com/vito1317/pai-framework) · `pip install paigent`
+- 全雙工 omni（不含權重，輕量）：[vito95311/minicpm-o-guardian-pai](https://huggingface.co/vito95311/minicpm-o-guardian-pai)
+- 全雙工 omni（內嵌全套權重，離線）：[vito95311/minicpm-o-omni-guardian-pai](https://huggingface.co/vito95311/minicpm-o-omni-guardian-pai)
 
 ## License
 

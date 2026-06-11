@@ -57,8 +57,9 @@ self-finetuning 三層（記憶 / LoRA 熱插拔 / EvalGate）完全沿用。
 
 ## 相關連結
 
-- 框架原始碼：[github.com/vito1317/pai-framework](https://github.com/vito1317/pai-framework)
-- 內嵌權重的離線版本：[vito95311/gemma-guardian-pai](https://huggingface.co/vito95311/gemma-guardian-pai)（Gemma 4 26B-A4B）
+- 框架原始碼：[github.com/vito1317/pai-framework](https://github.com/vito1317/pai-framework) · `pip install paigent`
+- 同模型、內嵌全套權重（離線單檔 8.87GB）：[vito95311/minicpm-o-omni-guardian-pai](https://huggingface.co/vito95311/minicpm-o-omni-guardian-pai)
+- Gemma 4 內嵌權重離線版：[vito95311/gemma-guardian-pai](https://huggingface.co/vito95311/gemma-guardian-pai)
 
 ## License
 
