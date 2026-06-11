@@ -1,0 +1,2 @@
+include README.md FORMAT.md SELF_FINETUNING.md LICENSE
+recursive-include pai *.py py.typed

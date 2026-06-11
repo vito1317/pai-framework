@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pai-framework"
+version = "0.1.0"
+description = "Proactive AI Framework — event-driven, governed proactive agents with a GGUF-like .pai container format and self-finetuning"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "vito1317", email = "service@vito1317.com" }]
+keywords = ["proactive-ai", "agent", "llm", "gguf", "pai", "self-finetuning", "omni", "full-duplex"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# 核心零依賴（純標準庫）
+dependencies = []
+
+[project.optional-dependencies]
+local = ["llama-cpp-python>=0.3.0"]          # LocalLLMBrain
+omni = ["transformers==4.51.0", "accelerate", "torch>=2.3.0", "torchaudio"]  # MiniCPMoBrain
+finetune = ["llamafactory"]                  # LlamaFactoryBackend
+dev = ["build", "twine", "pytest"]
+
+[project.urls]
+Homepage = "https://github.com/vito1317/pai-framework"
+Repository = "https://github.com/vito1317/pai-framework"
+"Model: Gemma 4" = "https://huggingface.co/vito95311/gemma-guardian-pai"
+"Model: MiniCPM-o" = "https://huggingface.co/vito95311/minicpm-o-guardian-pai"
+
+[project.scripts]
+pai = "pai.__main__:main"
+
+[tool.setuptools]
+packages = ["pai"]
+
+[tool.setuptools.package-data]
+pai = ["py.typed"]

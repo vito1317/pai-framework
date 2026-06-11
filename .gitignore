@@ -11,3 +11,9 @@ archive/
 __pycache__/
 *.pyc
 .DS_Store
+
+# 建置產物
+build/
+dist/
+*.egg-info/
+pai_adapters/
