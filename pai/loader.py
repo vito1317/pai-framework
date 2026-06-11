@@ -144,10 +144,23 @@ def load_runtime(
                                  fallback=rule_brain,
                                  user_profile=bj.get("user_profile", ""))
 
+    # 記憶式即時學習（self-finetuning 第一層）：brain.json 設 learning=true 即啟用
+    reflective = None
+    bj = r.read_json("brain.json") if "brain.json" in r.section_names else {}
+    if bj.get("learning"):
+        from .learning import EmbeddingClient, HashingEmbedder, ReflectiveMemory
+        embedder = HashingEmbedder()
+        # 若決策腦自帶本地 server，可共用它的 /v1/embeddings 做語義檢索
+        base_url = getattr(brain, "base_url", None)
+        if base_url:
+            embedder = EmbeddingClient(base_url, fallback=HashingEmbedder())
+        reflective = ReflectiveMemory(memory_path, embedder=embedder)
+
     agent = PAIAgent(
         name=manifest.get("name", "pai-agent"),
         brain=brain, policy=policy, memory=Memory(memory_path),
         actions=actions, confirm_handler=confirm_handler,
+        reflective=reflective,
     )
     for decl in r.read_json("triggers.json"):
         try:

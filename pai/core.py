@@ -43,6 +43,12 @@ class Event:
         }
 
 
+def _event_summary(event: "Event") -> str:
+    """把事件壓成一行文字，供記憶檢索使用。"""
+    payload = " ".join(f"{k}={v}" for k, v in event.payload.items())
+    return f"{event.kind} from {event.source}: {payload}".strip()
+
+
 @dataclass
 class Intent:
     """決策層輸出的標準意圖格式。"""
@@ -68,12 +74,14 @@ class PAIAgent:
     """主動式 AI 代理：把觸發器、決策腦、治理政策、行動與記憶組裝成迴圈。"""
 
     def __init__(self, name: str, brain, policy, memory, actions: dict[str, Any],
-                 confirm_handler: Optional[Callable[[Intent], bool]] = None):
+                 confirm_handler: Optional[Callable[[Intent], bool]] = None,
+                 reflective=None):
         self.name = name
         self.brain = brain
         self.policy = policy
         self.memory = memory
         self.actions = actions            # {action_name: Action 實例}
+        self.reflective = reflective      # ReflectiveMemory（記憶式即時學習，選用）
         self.triggers: list = []
         self.confirm_handler = confirm_handler or (lambda intent: False)
         self._stop = threading.Event()
@@ -106,6 +114,12 @@ class PAIAgent:
     def _handle_event(self, event: Event):
         self.memory.record_event(event)
         context = self.memory.build_context(event)
+
+        # 記憶式即時學習：把相似情境的回饋教訓注入決策上下文
+        if self.reflective is not None:
+            lessons = self.reflective.lessons_for(_event_summary(event))
+            if lessons:
+                context["lessons_from_feedback"] = lessons
 
         intents = self.brain.decide(event, context)
         for intent in intents:
@@ -153,6 +167,7 @@ class PAIAgent:
                         self.memory.record_feedback(intent, positive=False)
                         execution["status"] = "declined"
                         feedback = "rejected"
+                        self._learn(event, intent, "rejected")
                 if approved:
                     try:
                         result = action.execute(intent)
@@ -167,7 +182,21 @@ class PAIAgent:
                         execution["status"] = "failed"
                         logger.exception("Action '%s' failed", intent.action)
 
+        # ACT 成功且使用者沒有否決 → 視為一次正向經驗
+        if execution["status"] == "executed" and granted == AutonomyLevel.ACT:
+            self._learn(event, intent, "accepted")
+
         # 產生並保存 PAI Protocol 標準紀錄
         record = build_record(event, context, intent, granted, cost,
                               execution=execution, user_feedback=feedback)
         self.memory.record_protocol(record)
+
+    # ---- 記憶式學習：對外的回饋 API ----
+    def record_user_feedback(self, event: Event, intent: Intent, feedback: str):
+        """外部 UI 收到使用者回饋（accepted/rejected/modified/ignored）時呼叫。"""
+        self._learn(event, intent, feedback)
+
+    def _learn(self, event: Event, intent: Intent, feedback: str):
+        if self.reflective is not None:
+            self.reflective.add_experience(
+                _event_summary(event), intent.action, intent.rationale, feedback)

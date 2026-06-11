@@ -11,6 +11,7 @@ from .memory import Memory
 from .protocol import PAI_PROTOCOL_VERSION, build_record, to_json, save_pai, load_pai
 from .paifile import PaiWriter, PaiReader, pack_agent, load_agent
 from .loader import load_runtime
+from .learning import ReflectiveMemory, HashingEmbedder, EmbeddingClient
 
 __version__ = "0.1.0"
 __author__ = "vito1317 <service@vito1317.com>"
@@ -24,4 +25,5 @@ __all__ = [
     "Memory",
     "PAI_PROTOCOL_VERSION", "build_record", "to_json", "save_pai", "load_pai",
     "PaiWriter", "PaiReader", "pack_agent", "load_agent", "load_runtime",
+    "ReflectiveMemory", "HashingEmbedder", "EmbeddingClient",
 ]
