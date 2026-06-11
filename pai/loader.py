@@ -124,6 +124,16 @@ def load_runtime(
                 # 串流抽取到快取（不會把整個權重讀進 RAM）
                 weights_path = r.extract_to_cache("weights.gguf")
                 engine = bj.get("engine", "llama-server")
+                # self-finetuning 第二層：找現役 LoRA adapter
+                # 優先側車 AdapterStore（可熱插拔），其次 .pai 內嵌的 adapters/active.gguf
+                lora_path = None
+                store_root = os.path.join(os.path.dirname(os.path.abspath(memory_path)),
+                                          "pai_adapters")
+                if os.path.exists(os.path.join(store_root, "index.json")):
+                    from .finetune import AdapterStore
+                    lora_path = AdapterStore(store_root).active_adapter()
+                if lora_path is None and "adapters/active.gguf" in r.section_names:
+                    lora_path = r.extract_to_cache("adapters/active.gguf")
                 if engine == "llama-server":
                     from .server_brain import LlamaServerBrain
                     brain = LlamaServerBrain(
@@ -131,6 +141,7 @@ def load_runtime(
                         base_url=bj.get("base_url"),
                         port=bj.get("port", 8089),
                         n_ctx=bj.get("n_ctx", 4096),
+                        lora_path=lora_path,
                         fallback=rule_brain,
                         user_profile=bj.get("user_profile", ""))
                 else:  # engine == "llama-cpp-python"

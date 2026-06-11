@@ -45,6 +45,7 @@ import io
 import json
 import mmap
 import os
+import shutil
 import struct
 import tempfile
 import time
@@ -305,4 +306,33 @@ def load_agent(path: str) -> dict:
             out[name.replace(".json", "")] = r.read_json(name)
     out["has_memory"] = "memory.db" in r.section_names
     out["has_weights"] = "weights.gguf" in r.section_names
+    out["has_adapter"] = "adapters/active.gguf" in r.section_names
     return out
+
+
+# ---- LoRA adapter 烘焙：發布時把現役 adapter 寫進 .pai（self-finetuning 第二層）----
+
+def bake_adapter_into_pai(src_pai: str, adapter_path: str, dst_pai: str) -> str:
+    """把一個 LoRA adapter 以 adapters/active.gguf 段寫進 .pai（複製其餘段，不動主幹內容）。
+
+    用於「發布一個已學習過的 agent」。日常熱插拔請用側車 AdapterStore，
+    不需要重寫 14GB 檔案。
+    """
+    r = PaiReader(src_pai)
+    w = PaiWriter()
+    tmp_dir = tempfile.mkdtemp(prefix="pai_bake_")
+    try:
+        for name in r.section_names:
+            if name == "adapters/active.gguf":
+                continue  # 用新的取代舊的
+            if name.endswith(".json"):
+                w.add_json(name, r.read_json(name))
+            else:
+                # 大段串流抽取到暫存再加入（保持記憶體恆定）
+                tmp = os.path.join(tmp_dir, name.replace("/", "_"))
+                r.extract_to(name, tmp)
+                w.add_file(name, tmp, compress=False)
+        w.add_file("adapters/active.gguf", adapter_path, compress=False)
+        return w.write(dst_pai)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)

@@ -9,7 +9,11 @@ from .policy import ProactivityPolicy
 from .actions import ConsoleNotifier, WebhookNotifier, CallbackAction
 from .memory import Memory
 from .protocol import PAI_PROTOCOL_VERSION, build_record, to_json, save_pai, load_pai
-from .paifile import PaiWriter, PaiReader, pack_agent, load_agent
+from .paifile import PaiWriter, PaiReader, pack_agent, load_agent, bake_adapter_into_pai
+from .finetune import (
+    AdapterStore, EvalGate, SelfFinetuneManager,
+    EchoBackend, LlamaFinetuneBackend, export_preference_dataset,
+)
 from .loader import load_runtime
 from .learning import ReflectiveMemory, HashingEmbedder, EmbeddingClient
 
@@ -26,4 +30,6 @@ __all__ = [
     "PAI_PROTOCOL_VERSION", "build_record", "to_json", "save_pai", "load_pai",
     "PaiWriter", "PaiReader", "pack_agent", "load_agent", "load_runtime",
     "ReflectiveMemory", "HashingEmbedder", "EmbeddingClient",
+    "bake_adapter_into_pai", "AdapterStore", "EvalGate", "SelfFinetuneManager",
+    "EchoBackend", "LlamaFinetuneBackend", "export_preference_dataset",
 ]

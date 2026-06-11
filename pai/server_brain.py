@@ -14,6 +14,7 @@ from __future__ import annotations
 import atexit
 import json
 import logging
+import os
 import shutil
 import subprocess
 import time
@@ -33,6 +34,7 @@ class LlamaServerBrain:
                  port: int = 8089,
                  n_ctx: int = 4096,
                  server_bin: str = "llama-server",
+                 lora_path: Optional[str] = None,
                  fallback: Optional[RuleBrain] = None,
                  user_profile: str = "",
                  startup_timeout: float = 300.0):
@@ -42,6 +44,7 @@ class LlamaServerBrain:
         self.port = port
         self.n_ctx = n_ctx
         self.server_bin = server_bin
+        self.lora_path = lora_path        # 現役 LoRA adapter（self-finetuning 第二層）
         self.fallback = fallback
         self.user_profile = user_profile
         self.startup_timeout = startup_timeout
@@ -71,11 +74,14 @@ class LlamaServerBrain:
         if not binpath:
             raise RuntimeError(f"找不到 {self.server_bin}（brew install llama.cpp）")
 
+        cmd = [binpath, "-m", self.weights_path, "--port", str(self.port),
+               "-c", str(self.n_ctx), "--no-webui"]
+        if self.lora_path and os.path.exists(self.lora_path):
+            cmd += ["--lora", self.lora_path]   # 熱載入 LoRA，主幹權重不動
+            logger.info("Attaching LoRA adapter: %s", self.lora_path)
         logger.info("Starting llama-server on :%d with %s", self.port, self.weights_path)
         self._proc = subprocess.Popen(
-            [binpath, "-m", self.weights_path, "--port", str(self.port),
-             "-c", str(self.n_ctx), "--no-webui"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         atexit.register(self.close)
         return self._wait_ready(url)
 

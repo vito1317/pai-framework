@@ -77,12 +77,35 @@ Eval set 從 PAI Protocol 紀錄自動累積（使用者明確 accepted/rejected
 
 ---
 
-## 路線圖
+## 實作狀態
 
-- [x] 第一層 ReflectiveMemory（已實作並驗證）
-- [ ] 第二層 `.pai` adapter 段 + `PaiWriter.add_adapter()` / loader `--lora` 熱載入
-- [ ] 第二層 背景訓練 worker（llama-finetune 包裝）
-- [ ] 第三層 EvalGate（eval set 累積 + 指標比較 + promote/rollback + 稽核）
+全部三層已實作並通過端到端測試（`finetune_demo.py`，EchoBackend 無 GPU 驗證）：
+
+- [x] 第一層 ReflectiveMemory（記憶式即時學習）
+- [x] 第二層 訓練後端（`EchoBackend` 測試用 / `LlamaFinetuneBackend` 真實，包 `llama-finetune`）
+- [x] 第二層 `export_preference_dataset`（回饋→偏好資料集）
+- [x] 第二層 `AdapterStore`（側車 adapter 管理、active 指標、歷史、回滾）
+- [x] 第二層 `LlamaServerBrain` 以 `--lora` 熱載入現役 adapter（主幹不動）
+- [x] 第二層 `bake_adapter_into_pai`（發布時把現役 adapter 烘焙進 `.pai`）
+- [x] 第三層 `EvalGate`（主指標增益門檻 + 非退化指標檢查）
+- [x] 第三層 `SelfFinetuneManager`（訓練→閘門→promote/丟棄→稽核 jsonl）
+
+實測驗證：第一次訓練 +0.07 增益通過上線；無增益再訓練被閘門擋下（保護「越學越壞」）；
+新增回饋後 v2 +0.05 通過；可一鍵回滾到 v1；全程主幹權重 `weights.gguf` 未變更。
+
+### 用真實 LoRA 訓練
+
+```python
+from pai import SelfFinetuneManager, EvalGate, LlamaFinetuneBackend
+mgr = SelfFinetuneManager(
+    db_path="pai_memory.db", adapters_root="pai_adapters",
+    trainer=LlamaFinetuneBackend("llama-finetune"),   # 需 llama.cpp 編出 llama-finetune
+    eval_gate=EvalGate(my_eval_fn, min_gain=0.02),
+    base_gguf="models/gemma-4-26B_q4_0-it.gguf", min_samples=200)
+mgr.maybe_train_and_promote()    # 可放進排程（每日/每週背景跑）
+```
+
+loader 會自動偵測 `pai_adapters/` 的現役 adapter 並在啟動 llama-server 時 `--lora` 掛上。
 
 ---
 Author: vito1317 <service@vito1317.com>
