@@ -6,6 +6,8 @@
 
 ## 安裝
 
+[![PyPI](https://img.shields.io/pypi/v/paigent)](https://pypi.org/project/paigent/)
+
 ```bash
 pip install paigent          # PyPI 發佈名為 paigent；import 仍是 `import pai`，CLI 仍是 `pai`
 ```
