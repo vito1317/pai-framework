@@ -33,7 +33,7 @@ class MiniCPMoBrain:
                  model_path: str = "openbmb/MiniCPM-o-4_5",
                  engine: str = "transformers",      # transformers | llama-server
                  base_url: Optional[str] = None,    # engine=llama-server 時的端點
-                 device: str = "cuda",
+                 device: Optional[str] = None,      # None=自動偵測 cuda→mps→cpu
                  init_audio: bool = True,
                  init_tts: bool = True,
                  init_vision: bool = True,
@@ -52,19 +52,30 @@ class MiniCPMoBrain:
         self._model = None
         self._disabled = False
 
+    @staticmethod
+    def _auto_device() -> str:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return "mps"
+        return "cpu"
+
     # ---- 模型載入（transformers 路徑）----
     def _ensure_model(self):
         if self._model is not None:
             return
         import torch
         from transformers import AutoModel
-        logger.info("Loading MiniCPM-o 4.5 (%s) ...", self.model_path)
+        device = self.device or self._auto_device()
+        self.device = device
+        logger.info("Loading MiniCPM-o 4.5 (%s) on %s ...", self.model_path, device)
         model = AutoModel.from_pretrained(
             self.model_path, trust_remote_code=True,
             attn_implementation="sdpa", torch_dtype=torch.bfloat16,
             init_vision=self.init_vision, init_audio=self.init_audio,
             init_tts=self.init_tts)
-        model = model.eval().to(self.device)
+        model = model.eval().to(device)
         if self.init_tts:
             model.init_tts()
         self._model = model

@@ -34,7 +34,7 @@ kwargs = dict(
     policy={
         "min_confidence": 0.5, "act_confidence": 0.9,
         "default_max_level": 1,                 # 主動發話預設只到「建議」
-        "action_max_levels": {"speak": 1, "remind": 2, "archive_file": 3, "__notify__": 1},
+        "action_max_levels": {"speak": 1, "archive_file": 3, "__notify__": 1},
         "quiet_hours": [22, 8],
         "max_interruptions_per_hour": 8,
     },
@@ -53,7 +53,6 @@ kwargs = dict(
     ],
     actions={
         "speak": {"type": "console"},           # 正式版接 TTS 播放
-        "remind": {"type": "console"},
         "archive_file": {"type": "callback", "handler": "ops.archive"},
         "__notify__": {"type": "console"},
     },
@@ -62,7 +61,7 @@ kwargs = dict(
         "engine": "minicpm-o",
         "model": "openbmb/MiniCPM-o-4_5",
         "omni_engine": "transformers",          # 或 "llama-server"（需內嵌/指定 GGUF）
-        "device": "cuda",                        # Apple Silicon 用 "mps"
+        # device 省略 → runtime 自動偵測 cuda → mps(Apple Silicon) → cpu
         "init_vision": True, "init_audio": True, "init_tts": True,
         "learning": True,
         "user_profile": "偏好簡短、最少打擾；高風險動作先確認",

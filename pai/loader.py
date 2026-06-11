@@ -144,7 +144,7 @@ def load_runtime(
                 brain = MiniCPMoBrain(
                     avail, model_path=model_path,
                     engine=bj.get("omni_engine", "transformers"),
-                    base_url=bj.get("base_url"), device=bj.get("device", "cuda"),
+                    base_url=bj.get("base_url"), device=bj.get("device"),  # None=自動偵測
                     init_audio=bj.get("init_audio", True),
                     init_tts=bj.get("init_tts", True),
                     init_vision=bj.get("init_vision", True),

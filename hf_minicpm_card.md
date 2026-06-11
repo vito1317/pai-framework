@@ -1,7 +1,6 @@
 ---
 license: apache-2.0
 base_model: openbmb/MiniCPM-o-4_5
-base_model_relation: adapter
 tags:
   - proactive-ai
   - pai
@@ -16,9 +15,12 @@ tags:
 以 **openbmb/MiniCPM-o-4_5**（9B omni：影像+音訊輸入、文字+語音輸出、全雙工）為決策腦的
 主動式 agent，打包成單一 `.pai` 檔。
 
-> 本檔 **不內嵌權重**（約 2 KB，只含 agent 設定）。`transformers` 路徑執行時會從
-> Hugging Face 自動載入 `openbmb/MiniCPM-o-4_5`。若要離線單檔，可改打包內嵌 GGUF
+> 本檔 **不內嵌權重**（約 2 KB，只含 agent 設定，引用基底模型）。`transformers` 路徑執行時
+> 會從 Hugging Face 自動載入 `openbmb/MiniCPM-o-4_5`。若要離線單檔，可改打包內嵌 GGUF
 > （`openbmb/MiniCPM-o-4_5-gguf`），見 `pack_minicpm_o.py` 的 `WEIGHTS`。
+>
+> （刻意不設 `base_model_relation`：這不是 adapter/finetune/quantized/merge 任一種，
+> 而是「引用基底模型的 agent 設定」，避免被歸入 MiniCPM-o 的 adapters 列表造成誤導。）
 
 ## 為什麼用 MiniCPM-o
 
@@ -50,7 +52,7 @@ self-finetuning 三層（記憶 / LoRA 熱插拔 / EvalGate）完全沿用。
 
 ## 硬體
 
-- transformers 路徑：建議 CUDA GPU（≥16GB）或 Apple Silicon（`device="mps"`）
+- transformers 路徑：建議 CUDA GPU（≥16GB）或 Apple Silicon。device 自動偵測（cuda→mps→cpu），無需手動指定
 - 全雙工即時串流建議搭配官方 `llama.cpp-omni` + WebRTC demo
 
 ## 相關連結
