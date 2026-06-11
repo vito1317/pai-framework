@@ -35,6 +35,7 @@ class LlamaServerBrain:
                  n_ctx: int = 4096,
                  server_bin: str = "llama-server",
                  lora_path: Optional[str] = None,
+                 lora_paths: Optional[list] = None,   # 啟動時預載多個 adapter（供執行期熱切換）
                  fallback: Optional[RuleBrain] = None,
                  user_profile: str = "",
                  startup_timeout: float = 300.0):
@@ -44,7 +45,10 @@ class LlamaServerBrain:
         self.port = port
         self.n_ctx = n_ctx
         self.server_bin = server_bin
-        self.lora_path = lora_path        # 現役 LoRA adapter（self-finetuning 第二層）
+        # 啟動時預載的 adapter 清單（第一個預設為現役 scale=1，其餘 scale=0）。
+        # 執行期可用 /lora-adapters 在這些已載入的 adapter 間熱切換，主幹不重載。
+        self.lora_paths = list(lora_paths) if lora_paths else ([lora_path] if lora_path else [])
+        self.lora_path = self.lora_paths[0] if self.lora_paths else None
         self.fallback = fallback
         self.user_profile = user_profile
         self.startup_timeout = startup_timeout
@@ -76,9 +80,11 @@ class LlamaServerBrain:
 
         cmd = [binpath, "-m", self.weights_path, "--port", str(self.port),
                "-c", str(self.n_ctx), "--no-webui"]
-        if self.lora_path and os.path.exists(self.lora_path):
-            cmd += ["--lora", self.lora_path]   # 熱載入 LoRA，主幹權重不動
-            logger.info("Attaching LoRA adapter: %s", self.lora_path)
+        # 預載所有候選 adapter（之後可在它們之間執行期熱切換，主幹只載入一次）
+        for p in self.lora_paths:
+            if p and os.path.exists(p):
+                cmd += ["--lora", p]
+                logger.info("Preloading LoRA adapter: %s", p)
         logger.info("Starting llama-server on :%d with %s", self.port, self.weights_path)
         self._proc = subprocess.Popen(
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -95,6 +101,50 @@ class LlamaServerBrain:
                 return url
             time.sleep(2)
         raise RuntimeError("llama-server 啟動逾時")
+
+    # ---- 執行期 LoRA 熱切換（不重載 14.4GB 主幹）----
+    def list_lora_adapters(self) -> list:
+        """GET /lora-adapters：回傳已載入的 adapter（含 id / path / scale）。"""
+        url = self._ensure_server()
+        with urllib.request.urlopen(f"{url}/lora-adapters", timeout=15) as resp:
+            return json.loads(resp.read())
+
+    def set_lora_scales(self, scales: list) -> dict:
+        """POST /lora-adapters：設定各 adapter 的 scale，例如 [{"id":0,"scale":1.0},...]。"""
+        url = self._ensure_server()
+        req = urllib.request.Request(
+            f"{url}/lora-adapters", data=json.dumps(scales).encode(),
+            headers={"content-type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return {"status": resp.status}
+
+    def activate_lora(self, path: str, scale: float = 1.0) -> dict:
+        """執行期熱切換到指定 adapter：把它的 scale 設為 scale、其餘設 0，主幹不重載。
+
+        該 adapter 必須在啟動時已用 --lora 預載（在 self.lora_paths 內）。
+        若是訓練出的全新 adapter 不在預載清單，需重啟才能掛入（llama.cpp 現況限制）。
+        """
+        adapters = self.list_lora_adapters()
+        scales, matched = [], False
+        for a in adapters:
+            apath = a.get("path", "")
+            on = os.path.abspath(apath) == os.path.abspath(path)
+            matched = matched or on
+            scales.append({"id": a.get("id"), "scale": scale if on else 0.0})
+        if not matched:
+            raise ValueError(f"adapter 未預載，無法執行期熱切換：{path}"
+                             "（請放進 lora_paths 啟動時預載，或重啟 server）")
+        self.set_lora_scales(scales)
+        self.lora_path = path
+        logger.info("Hot-swapped active LoRA → %s (no base reload)", path)
+        return {"active": path}
+
+    def deactivate_lora(self) -> dict:
+        """把所有 adapter scale 設 0（回到純主幹），主幹不重載。"""
+        adapters = self.list_lora_adapters()
+        self.set_lora_scales([{"id": a.get("id"), "scale": 0.0} for a in adapters])
+        self.lora_path = None
+        return {"active": None}
 
     def close(self):
         if self._proc and self._proc.poll() is None:

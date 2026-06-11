@@ -80,6 +80,36 @@ class MiniCPMoBrain:
             model.init_tts()
         self._model = model
 
+    # ---- 執行期 LoRA 熱切換（self-finetuning 第二層；主幹不重載）----
+    def activate_lora(self, adapter_path: str, adapter_name: str = "active") -> dict:
+        """transformers/PEFT 路徑：載入並切到指定 LoRA adapter，主幹權重不動。
+
+        llama-server 路徑請改用 LlamaServerBrain.activate_lora（/lora-adapters）。
+        """
+        if self.engine != "transformers":
+            raise RuntimeError("activate_lora 僅用於 transformers 路徑；"
+                               "llama-server 路徑請用 LlamaServerBrain.activate_lora")
+        self._ensure_model()
+        from peft import PeftModel
+        # 已是 PeftModel 就加 adapter，否則包成 PeftModel
+        if isinstance(self._model, PeftModel) or hasattr(self._model, "load_adapter"):
+            try:
+                self._model.load_adapter(adapter_path, adapter_name=adapter_name)
+            except Exception:  # 同名已載入 → 直接切換
+                pass
+            self._model.set_adapter(adapter_name)
+        else:
+            self._model = PeftModel.from_pretrained(
+                self._model, adapter_path, adapter_name=adapter_name)
+        logger.info("MiniCPM-o transformers: activated LoRA %s (no base reload)", adapter_path)
+        return {"active": adapter_path}
+
+    def deactivate_lora(self) -> dict:
+        """停用 adapter，回到純主幹（主幹不重載）。"""
+        if self._model is not None and hasattr(self._model, "disable_adapter_layers"):
+            self._model.disable_adapter_layers()
+        return {"active": None}
+
     # ---- 決策 ----
     def decide(self, event: Event, context: dict) -> list[Intent]:
         if self._disabled:

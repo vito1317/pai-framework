@@ -19,6 +19,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass
@@ -127,20 +128,64 @@ class LlamaFactoryBackend:
 class LlamaFinetuneBackend:
     """真實後端：包 llama.cpp 的 llama-finetune，產生 GGUF 格式 LoRA adapter。
 
-    需要 llama.cpp 編譯出 llama-finetune（部分發行版為 finetune）。
-    主幹 base_gguf 不會被修改，只輸出 adapter。
+    主幹 base_gguf 不會被修改，只輸出 adapter。會自動偵測二進位名稱
+    （llama-finetune / finetune）。偏好資料集（chat 偏好對）會先轉成
+    llama-finetune 需要的純文字訓練檔（每行一個「情境→好行為」樣本）。
+
+    不同 llama.cpp 版本的 finetune 旗標略有差異，可用 arg_template 客製：
+        {model}  base gguf
+        {data}   訓練文字檔
+        {out}    輸出 adapter
+    預設對齊近期 llama-finetune 的常見參數；若你的版本不同，傳入 arg_template 覆寫。
     """
 
-    def __init__(self, bin_path: str = "llama-finetune", extra_args: Optional[list] = None):
+    DEFAULT_ARG_TEMPLATE = [
+        "--model-base", "{model}",
+        "--train-data", "{data}",
+        "--lora-out", "{out}",
+        "--save-every", "0",
+        "--threads", "8",
+        "--adam-iter", "256",
+        "--batch", "4",
+        "--ctx", "512",
+    ]
+
+    def __init__(self, bin_path: Optional[str] = None,
+                 arg_template: Optional[list] = None,
+                 extra_args: Optional[list] = None):
         self.bin_path = bin_path
+        self.arg_template = arg_template or self.DEFAULT_ARG_TEMPLATE
         self.extra_args = extra_args or []
 
+    def _resolve_bin(self) -> str:
+        for cand in ([self.bin_path] if self.bin_path else ["llama-finetune", "finetune"]):
+            exe = shutil.which(cand) if cand else None
+            if exe:
+                return exe
+        raise RuntimeError("找不到 llama-finetune（請用 llama.cpp 編出 finetune 範例）")
+
+    @staticmethod
+    def _to_text_corpus(dataset_jsonl: str) -> str:
+        """偏好對 jsonl → llama-finetune 純文字訓練檔（取 chosen 作為監督目標）。"""
+        out = dataset_jsonl + ".txt"
+        with open(dataset_jsonl, encoding="utf-8") as fin, \
+                open(out, "w", encoding="utf-8") as fout:
+            for line in fin:
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                fout.write(f"{rec['prompt']}\n{rec['chosen']}\n\n")
+        return out
+
     def train(self, dataset_jsonl: str, base_gguf: Optional[str], out_adapter: str) -> str:
-        exe = shutil.which(self.bin_path)
-        if not exe or not base_gguf:
-            raise RuntimeError("llama-finetune 不可用或缺少 base_gguf")
-        cmd = [exe, "-m", base_gguf, "--lora-out", out_adapter,
-               "--train-data", dataset_jsonl, *self.extra_args]
+        if not base_gguf:
+            raise RuntimeError("缺少 base_gguf")
+        exe = self._resolve_bin()
+        corpus = self._to_text_corpus(dataset_jsonl)
+        subs = {"model": base_gguf, "data": corpus, "out": out_adapter}
+        args = [a.format(**subs) for a in self.arg_template]
+        cmd = [exe, *args, *self.extra_args]
         logger.info("Running llama-finetune: %s", " ".join(cmd))
         subprocess.run(cmd, check=True)
         return out_adapter
@@ -249,14 +294,18 @@ class SelfFinetuneManager:
 
     def __init__(self, db_path: str, adapters_root: str,
                  trainer: TrainerBackend, eval_gate: Optional[EvalGate] = None,
-                 base_gguf: Optional[str] = None, min_samples: int = 50):
+                 base_gguf: Optional[str] = None, min_samples: int = 50,
+                 brain=None):
         self.db_path = db_path
         self.store = AdapterStore(adapters_root)
         self.trainer = trainer
         self.eval_gate = eval_gate
         self.base_gguf = base_gguf
         self.min_samples = min_samples
+        self.brain = brain                      # 選用：promote 後嘗試執行期熱切換
         self.audit_path = os.path.join(adapters_root, "audit.jsonl")
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
 
     def _audit(self, entry: dict):
         entry["ts"] = datetime.now(timezone.utc).isoformat()
@@ -281,10 +330,35 @@ class SelfFinetuneManager:
             rec = self.store.add(cand, n_samples=n,
                                  metrics=decision.get("candidate_metrics", {}),
                                  active=True)
+            # 嘗試執行期熱切換（主幹不重載）；若 adapter 未預載則需重啟才生效
+            hot = None
+            if self.brain is not None and hasattr(self.brain, "activate_lora"):
+                try:
+                    self.brain.activate_lora(rec.path)
+                    hot = "hot-swapped"
+                except Exception as e:  # noqa: BLE001
+                    hot = f"needs-restart ({e})"
             self._audit({"event": "promote", "adapter": rec.id,
-                         "n_samples": n, "decision": decision})
+                         "n_samples": n, "decision": decision, "apply": hot})
             return {"trained": True, "promoted": True, "adapter": rec.id,
-                    "decision": decision}
+                    "decision": decision, "apply": hot}
 
         self._audit({"event": "reject", "n_samples": n, "decision": decision})
         return {"trained": True, "promoted": False, "decision": decision}
+
+    # ---- 定期排程（self-finetuning 第一項：定期匯出+訓練+上線）----
+    def run_periodic(self, interval_sec: float, workdir: Optional[str] = None):
+        """背景執行緒：每 interval_sec 跑一次 maybe_train_and_promote。"""
+        def loop():
+            while not self._stop.wait(interval_sec):
+                try:
+                    res = self.maybe_train_and_promote(workdir)
+                    logger.info("scheduled self-finetune: %s", res)
+                except Exception:  # noqa: BLE001
+                    logger.exception("scheduled self-finetune failed")
+        self._thread = threading.Thread(target=loop, daemon=True)
+        self._thread.start()
+        logger.info("self-finetune scheduler started (every %.0fs)", interval_sec)
+
+    def stop(self):
+        self._stop.set()

@@ -125,14 +125,21 @@ def load_runtime(
             has_weights = prefer_local_weights and "weights.gguf" in r.section_names
 
             # self-finetuning 第二層：找現役 LoRA adapter（側車優先，其次 .pai 內嵌段）
+            # lora_paths：預載全部已知 adapter（供執行期 /lora-adapters 熱切換，主幹不重載）
             lora_path = None
+            lora_paths: list = []
             store_root = os.path.join(os.path.dirname(os.path.abspath(memory_path)),
                                       "pai_adapters")
             if os.path.exists(os.path.join(store_root, "index.json")):
                 from .finetune import AdapterStore
-                lora_path = AdapterStore(store_root).active_adapter()
+                store = AdapterStore(store_root)
+                lora_path = store.active_adapter()
+                # 現役排第一，其餘也預載以便熱切換
+                lora_paths = ([lora_path] if lora_path else []) + \
+                    [r["path"] for r in store.index if r["path"] != lora_path]
             if lora_path is None and "adapters/active.gguf" in r.section_names:
                 lora_path = r.extract_to_cache("adapters/active.gguf")
+                lora_paths = [lora_path]
 
             if engine == "minicpm-o":
                 # MiniCPM-o：transformers 路徑從 HF/本地 model_path 載入（不需內嵌 gguf）；
@@ -155,7 +162,7 @@ def load_runtime(
                 brain = LlamaServerBrain(
                     avail, weights_path=weights_path, base_url=bj.get("base_url"),
                     port=bj.get("port", 8089), n_ctx=bj.get("n_ctx", 4096),
-                    lora_path=lora_path, fallback=rule_brain,
+                    lora_path=lora_path, lora_paths=lora_paths, fallback=rule_brain,
                     user_profile=bj.get("user_profile", ""))
             elif has_weights:  # engine == "llama-cpp-python"
                 weights_path = r.extract_to_cache("weights.gguf")

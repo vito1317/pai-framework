@@ -15,6 +15,7 @@ from .finetune import (
     EchoBackend, LlamaFinetuneBackend, LlamaFactoryBackend, export_preference_dataset,
 )
 from .omni_brain import MiniCPMoBrain, DuplexOmniLoop
+from .selfft import attach_self_finetuning
 from .loader import load_runtime
 from .learning import ReflectiveMemory, HashingEmbedder, EmbeddingClient
 
@@ -33,5 +34,5 @@ __all__ = [
     "ReflectiveMemory", "HashingEmbedder", "EmbeddingClient",
     "bake_adapter_into_pai", "AdapterStore", "EvalGate", "SelfFinetuneManager",
     "EchoBackend", "LlamaFinetuneBackend", "LlamaFactoryBackend", "export_preference_dataset",
-    "MiniCPMoBrain", "DuplexOmniLoop",
+    "MiniCPMoBrain", "DuplexOmniLoop", "attach_self_finetuning",
 ]

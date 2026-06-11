@@ -93,6 +93,36 @@ Eval set 從 PAI Protocol 紀錄自動累積（使用者明確 accepted/rejected
 實測驗證：第一次訓練 +0.07 增益通過上線；無增益再訓練被閘門擋下（保護「越學越壞」）；
 新增回饋後 v2 +0.05 通過；可一鍵回滾到 v1；全程主幹權重 `weights.gguf` 未變更。
 
+### 完整 1+2+3 一行掛上（模型無關，Gemma 與 MiniCPM-o 皆適用）
+
+```python
+from pai import load_runtime, attach_self_finetuning
+
+agent = load_runtime("gemma-guardian.pai", handlers=..., metrics=...)
+mgr = attach_self_finetuning(agent, eval_fn=my_eval_fn, min_samples=200)
+mgr.run_periodic(interval_sec=86400)     # 每日：匯出回饋→訓練→閘門→上線（熱切換）
+agent.run()
+```
+
+`attach_self_finetuning` 會依決策腦自動選後端與熱切換機制：
+
+| 決策腦 | 訓練後端 | 上線熱切換 |
+|---|---|---|
+| `LlamaServerBrain`（Gemma / MiniCPM-o GGUF） | `LlamaFinetuneBackend`（llama-finetune，GGUF LoRA） | llama-server `/lora-adapters`，主幹不重載 |
+| `MiniCPMoBrain`（transformers） | `LlamaFactoryBackend`（PEFT LoRA） | PEFT `set_adapter`，主幹不重載 |
+
+四個環節對照你列的需求：
+1. **資料來源**：`ActionFeedback`（核准/駁回）→ `experiences` 表 → `export_preference_dataset()`；
+   `run_periodic()` 定期觸發。
+2. **訓練**：`LlamaFinetuneBackend`（QAT q4_0 上跑 LoRA）/ `LlamaFactoryBackend`。主幹不變。
+3. **上線**：`/lora-adapters` 或 PEFT `set_adapter` 執行期熱切換，**不重載 14.4GB 主幹**；
+   `AdapterStore.rollback()` 一鍵摘掉回滾。
+4. **閘門**：`EvalGate` 離線評測，沒退化才掛上。
+
+> 注意：`/lora-adapters` 熱切換要求 adapter 在啟動時已用 `--lora` 預載（loader 會把
+> AdapterStore 內所有 adapter 預載）；訓練出的**全新** adapter 若不在預載清單，需重啟一次
+> 才能進入可熱切換集合——這是 llama.cpp 現況限制。
+
 ### 用真實 LoRA 訓練
 
 ```python
