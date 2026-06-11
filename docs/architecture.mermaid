@@ -1,0 +1,121 @@
+%% PAI — Proactive AI Framework 完整架構（含 self-finetuning 1+2+3、雙模型）
+%% 線上預覽：https://mermaid.live
+flowchart TB
+
+    subgraph PERCEIVE["① 感知層 Triggers"]
+        direction LR
+        T1[IntervalTrigger<br/>心跳/輪詢]
+        T2[ScheduleTrigger<br/>每日定時]
+        T3[FileWatchTrigger<br/>檔案變動]
+        T4[ThresholdTrigger<br/>指標越界]
+        T5[DuplexOmniLoop<br/>全雙工持續感知<br/>看+聽串流]
+    end
+
+    EVENT{{"Event<br/>source / kind / payload / ts"}}
+    T1 --> EVENT
+    T2 --> EVENT
+    T3 --> EVENT
+    T4 --> EVENT
+    T5 --> EVENT
+
+    subgraph DECIDE["② 決策層 Brain（模型無關，可插拔）"]
+        direction TB
+        RB["RuleBrain<br/>純規則 · 離線 · 零成本<br/>(前線哨兵 + fallback)"]
+        subgraph LLMB["LLM 決策腦"]
+            direction LR
+            B1["LLMBrain<br/>雲端 API"]
+            B2["LocalLLMBrain<br/>llama-cpp-python"]
+            B3["LlamaServerBrain<br/>llama.cpp /server<br/>Gemma 4 26B-A4B"]
+            B4["MiniCPMoBrain<br/>MiniCPM-o 4.5<br/>omni 全雙工"]
+        end
+        RB -. "LLM 失敗自動退回" .- LLMB
+    end
+
+    EVENT --> DECIDE
+    MEMCTX["記憶上下文 + 回饋教訓<br/>(ReflectiveMemory.lessons_for)"] --> DECIDE
+
+    INTENT{{"Intent<br/>action / params / confidence<br/>urgency / rationale / level"}}
+    DECIDE --> INTENT
+
+    subgraph GOVERN["③ 治理層 ProactivityPolicy"]
+        direction TB
+        G1[1 信心門檻]
+        G2[2 動作風險上限]
+        G3[3 回饋自動降級]
+        G4[4 安靜時段]
+        G5["5 干擾度公式<br/>urgency×confidence > cost"]
+        G6[6 每小時打擾上限]
+        G1 --> G2 --> G3 --> G4 --> G5 --> G6
+    end
+    INTENT --> GOVERN
+
+    LEVEL{{"授予自主等級"}}
+    GOVERN --> LEVEL
+
+    subgraph ACT["④ 行動層 Actions"]
+        direction LR
+        A0["OBSERVE<br/>只記錄"]
+        A1["SUGGEST<br/>通知/微光提示"]
+        A2["ASK<br/>草稿+人類確認"]
+        A3["ACT<br/>自動執行"]
+    end
+    LEVEL --> ACT
+
+    subgraph MEM["⑤ 記憶層 Memory (SQLite)"]
+        direction LR
+        M1[events]
+        M2[intents]
+        M3[outcomes]
+        M4["feedback<br/>accepted/rejected/<br/>modified/ignored"]
+        M5[protocol_records<br/>PAI Protocol v1.1]
+        M6[experiences<br/>向量化經驗]
+    end
+    ACT --> MEM
+    MEM --> MEMCTX
+
+    %% ===== self-finetuning 三層 =====
+    subgraph SFT["Self-Finetuning（1+2+3，主幹權重永不變更）"]
+        direction TB
+        L1["第1層 記憶式學習<br/>ReflectiveMemory<br/>回饋→經驗向量→檢索注入"]
+        EXPORT["export_preference_dataset<br/>accepted=正例 / rejected=負例"]
+        TRAIN["第2層 訓練後端<br/>LlamaFinetuneBackend (GGUF LoRA)<br/>LlamaFactoryBackend (PEFT LoRA)"]
+        CAND[["候選 adapter"]]
+        GATE{"第3層 EvalGate<br/>增益≥門檻 且 無退化?"}
+        STORE["AdapterStore<br/>active 指標 / 歷史 / 回滾"]
+        HOT["執行期熱切換<br/>/lora-adapters (llama-server)<br/>set_adapter (PEFT)<br/>主幹不重載"]
+        AUDIT[(稽核 audit.jsonl)]
+        SCHED["run_periodic<br/>定期排程"]
+
+        L1 --> EXPORT --> TRAIN --> CAND --> GATE
+        GATE -- "通過" --> STORE --> HOT
+        GATE -- "未通過/退化" --> AUDIT
+        STORE --> AUDIT
+        HOT --> AUDIT
+        SCHED -. 觸發 .-> EXPORT
+    end
+
+    M4 --> L1
+    M6 --> L1
+    HOT -. "新 adapter 掛回決策腦" .-> B3
+    HOT -. "新 adapter 掛回決策腦" .-> B4
+    STORE -. rollback .-> B3
+
+    %% ===== .pai 容器 =====
+    subgraph PAI[".pai 二進位容器格式（類 GGUF，單檔可發布）"]
+        direction LR
+        P1["manifest / policy<br/>triggers / rules / actions / brain<br/>(JSON, zlib)"]
+        P2["weights.gguf<br/>主幹權重 (mmap, 不壓縮)"]
+        P3["weights/vision·audio·tts<br/>token2wav (omni 元件)"]
+        P4["adapters/active.gguf<br/>(可烘焙發布)"]
+        P5["每段 SHA-256 校驗<br/>64-byte 對齊"]
+    end
+    PAI ==> |"load_runtime 實例化"| DECIDE
+    PAI ==> GOVERN
+    PAI ==> ACT
+
+    classDef ev fill:#fde68a,stroke:#b45309,color:#000;
+    classDef sft fill:#bbf7d0,stroke:#15803d,color:#000;
+    classDef pai fill:#bfdbfe,stroke:#1d4ed8,color:#000;
+    class EVENT,INTENT,LEVEL ev;
+    class L1,EXPORT,TRAIN,CAND,GATE,STORE,HOT,AUDIT,SCHED sft;
+    class P1,P2,P3,P4,P5 pai;

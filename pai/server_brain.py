@@ -21,7 +21,8 @@ import time
 import urllib.request
 from typing import Optional
 
-from .brain import RuleBrain, _LLM_SYSTEM_PROMPT
+from ._jsonutil import retry_call
+from .brain import RuleBrain, parse_intents, _LLM_SYSTEM_PROMPT
 from .core import AutonomyLevel, Event, Intent
 
 logger = logging.getLogger("pai.server_brain")
@@ -183,24 +184,11 @@ class LlamaServerBrain:
                 "max_tokens": 1024, "temperature": 0.2,
             }).encode(),
             headers={"content-type": "application/json"})
-        with urllib.request.urlopen(req, timeout=600) as resp:
-            data = json.loads(resp.read())
-        text = data["choices"][0]["message"]["content"]
-        return self._parse(text)
 
-    def _parse(self, text: str) -> list[Intent]:
-        start, end = text.find("["), text.rfind("]")
-        if start == -1 or end == -1:
-            return []
-        intents = []
-        for it in json.loads(text[start:end + 1]):
-            if it.get("action") not in self.available_actions:
-                continue
-            intents.append(Intent(
-                action=it["action"], params=it.get("params", {}),
-                confidence=float(it.get("confidence", 0.5)),
-                urgency=float(it.get("urgency", 0.5)),
-                rationale=it.get("rationale", ""),
-                requested_level=AutonomyLevel(int(it.get("requested_level", 1))),
-            ))
-        return intents
+        def _do():
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                return json.loads(resp.read())
+
+        data = retry_call(_do, attempts=2)   # 暫時性錯誤先重試再談 fallback
+        text = data["choices"][0]["message"]["content"]
+        return parse_intents(text, self.available_actions)

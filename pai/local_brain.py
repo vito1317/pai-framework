@@ -16,7 +16,7 @@ import os
 import tempfile
 from typing import Optional
 
-from .brain import RuleBrain, _LLM_SYSTEM_PROMPT
+from .brain import RuleBrain, parse_intents, _LLM_SYSTEM_PROMPT
 from .core import AutonomyLevel, Event, Intent
 
 logger = logging.getLogger("pai.local_brain")
@@ -89,18 +89,4 @@ class LocalLLMBrain:
             return self.fallback.decide(event, context) if self.fallback else []
 
     def _parse(self, text: str) -> list[Intent]:
-        start, end = text.find("["), text.rfind("]")
-        if start == -1 or end == -1:
-            return []
-        intents = []
-        for it in json.loads(text[start:end + 1]):
-            if it.get("action") not in self.available_actions:
-                continue
-            intents.append(Intent(
-                action=it["action"], params=it.get("params", {}),
-                confidence=float(it.get("confidence", 0.5)),
-                urgency=float(it.get("urgency", 0.5)),
-                rationale=it.get("rationale", ""),
-                requested_level=AutonomyLevel(int(it.get("requested_level", 1))),
-            ))
-        return intents
+        return parse_intents(text, self.available_actions)

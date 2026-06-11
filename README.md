@@ -21,6 +21,9 @@ pip install paigent          # PyPI 發佈名為 paigent；import 仍是 `import
 
 ## 架構
 
+詳細架構圖：[docs/architecture.svg](docs/architecture.svg)（手繪精緻版）、
+[docs/architecture.mermaid](docs/architecture.mermaid)（Mermaid 原始碼，可於 mermaid.live 預覽）。
+
 ```
 ┌─ 感知層 Triggers ─────────────────────────────┐
 │ IntervalTrigger / ScheduleTrigger             │
@@ -170,6 +173,42 @@ brain = LLMBrain(
 ```
 
 成本控制採「雙層觸發」：RuleBrain 當前線哨兵過濾大多數事件，只有規則判定值得深入時才喚醒 LLM。
+
+## 接平台（哨兵 → webhook）
+
+把 PAI 當「主動哨兵」掛到既有後端：PAI 負責持續感知＋治理判斷，真正的副作用交給你的平台 API。
+用 `WebhookNotifier` 或 `CallbackAction` 把通過治理層的意圖 POST 到 `/webhooks/{node}`：
+
+```python
+from pai import load_runtime
+from pai.actions import WebhookNotifier, CallbackAction
+import urllib.request, json
+
+def post_webhook(node):
+    def _fn(intent):
+        body = json.dumps({
+            "node": node, "action": intent.action, "params": intent.params,
+            "confidence": intent.confidence, "urgency": intent.urgency,
+            "rationale": intent.rationale,
+        }).encode()
+        req = urllib.request.Request(
+            f"https://your-platform.example/webhooks/{node}",
+            data=body, headers={"content-type": "application/json",
+                                 "authorization": "Bearer <token>"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return {"status": r.status}
+    return CallbackAction(_fn)
+
+agent = load_runtime("gemma-guardian.pai", handlers={
+    "cleanup":      post_webhook("ops.cleanup"),
+    "archive_file": post_webhook("files.archive"),
+}, metrics={"cpu": read_cpu})
+# 或直接用內建：actions={"__notify__": WebhookNotifier("https://.../webhooks/notify")}
+agent.run()
+```
+
+治理層先過濾（信心/風險/安靜時段/干擾度/頻率），只有真正該動作的意圖才會打到你的平台——
+等於替既有系統加一層「會自己判斷何時該出手」的主動神經。
 
 ## 落地建議
 

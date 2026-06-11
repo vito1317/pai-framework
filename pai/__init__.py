@@ -19,7 +19,7 @@ from .selfft import attach_self_finetuning
 from .loader import load_runtime
 from .learning import ReflectiveMemory, HashingEmbedder, EmbeddingClient
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "vito1317 <service@vito1317.com>"
 
 __all__ = [

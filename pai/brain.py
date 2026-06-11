@@ -12,9 +12,34 @@ import os
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from ._jsonutil import extract_json_array, retry_call
 from .core import AutonomyLevel, Event, Intent
 
 logger = logging.getLogger("pai.brain")
+
+
+def parse_intents(text: str, available_actions) -> list[Intent]:
+    """共用：把 LLM 文字輸出穩健地解析成 Intent 清單。
+
+    用括號配對掃描抽出第一個平衡的 JSON 陣列（容忍多陣列/夾帶文字/code fence），
+    過濾未登記的 action，並對缺欄位給安全預設。所有決策腦共用此函式。
+    """
+    intents = []
+    for it in extract_json_array(text):
+        if not isinstance(it, dict) or it.get("action") not in available_actions:
+            continue
+        try:
+            intents.append(Intent(
+                action=it["action"],
+                params=it.get("params", {}) or {},
+                confidence=float(it.get("confidence", 0.5)),
+                urgency=float(it.get("urgency", 0.5)),
+                rationale=it.get("rationale", ""),
+                requested_level=AutonomyLevel(int(it.get("requested_level", 1))),
+            ))
+        except (ValueError, TypeError):
+            continue
+    return intents
 
 
 @dataclass
@@ -112,26 +137,15 @@ class LLMBrain:
                 "anthropic-version": "2023-06-01",
             },
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read())
+
+        def _do():
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read())
+
+        # 暫時性網路錯誤先重試一次，救回 LLM 級判斷再談 fallback
+        data = retry_call(_do, attempts=2)
         text = "".join(b.get("text", "") for b in data.get("content", []))
         return self._parse(text)
 
     def _parse(self, text: str) -> list[Intent]:
-        start, end = text.find("["), text.rfind("]")
-        if start == -1 or end == -1:
-            return []
-        items = json.loads(text[start:end + 1])
-        intents = []
-        for it in items:
-            if it.get("action") not in self.available_actions:
-                continue
-            intents.append(Intent(
-                action=it["action"],
-                params=it.get("params", {}),
-                confidence=float(it.get("confidence", 0.5)),
-                urgency=float(it.get("urgency", 0.5)),
-                rationale=it.get("rationale", ""),
-                requested_level=AutonomyLevel(int(it.get("requested_level", 1))),
-            ))
-        return intents
+        return parse_intents(text, self.available_actions)
