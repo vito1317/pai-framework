@@ -1,4 +1,12 @@
-"""把 Gemma 4 26B-A4B QAT q4_0 打包成可離線運行的 .pai agent。"""
+"""把 Gemma 4 26B-A4B QAT q4_0 打包成可離線運行的 guardian .pai agent。
+
+設計原則（自洽）：每個 action 都有對應的 trigger 會產生它需要的事件，
+且 llama-server 不可用退回 RuleBrain 時，每條規則仍可獨立運作。
+
+guardian 行為：
+- cpu-monitor (threshold) → metric.breach → cleanup（清理高負載，最多 ASK）
+- inbox-watch (filewatch) → file.created → archive_file（自動歸檔，可 ACT）
+"""
 import os
 
 from pai import pack_agent
@@ -11,9 +19,10 @@ path = pack_agent(
     OUT,
     manifest={
         "name": "gemma-guardian",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "author": "vito1317 <service@vito1317.com>",
-        "description": "以 Gemma 4 26B-A4B (QAT q4_0) 為本地決策腦的主動式 agent",
+        "description": "以 Gemma 4 26B-A4B (QAT q4_0) 為本地決策腦的主動式 guardian agent："
+                       "監控系統指標並主動處理異常、自動歸檔新檔案",
         "framework_compat": ">=0.1.0",
         "base_model": "google/gemma-4-26B-A4B-it-qat-q4_0",
         "model_license": "apache-2.0",
@@ -24,15 +33,21 @@ path = pack_agent(
         "action_max_levels": {"cleanup": 2, "archive_file": 3, "__notify__": 1},
         "max_interruptions_per_hour": 6,
     },
+    # 每個 action 都有對應 trigger 來源（無死角）
     triggers=[
-        {"type": "interval", "name": "inbox-pulse", "params": {"interval_sec": 10}},
+        {"type": "threshold", "name": "cpu-monitor",
+         "params": {"metric": "cpu", "threshold": 75, "direction": "above",
+                    "check_interval": 2}},
         {"type": "filewatch", "name": "inbox-watch", "params": {"path": "./watched"}},
     ],
+    # RuleBrain fallback：兩條規則涵蓋兩個 action
     rules=[
-        # LLM 失敗時的安全 fallback 規則
+        {"when": {"kind": "metric.breach", "source": "cpu-monitor"},
+         "intent": {"action": "cleanup", "confidence": 0.9, "urgency": 0.95,
+                    "level": 2, "rationale": "CPU 使用率超過閾值，建議清理背景程序"}},
         {"when": {"kind": "file.created"},
          "intent": {"action": "archive_file", "confidence": 0.95, "urgency": 0.3,
-                    "level": 3, "rationale": "新檔案自動歸檔（規則 fallback）"}},
+                    "level": 3, "rationale": "偵測到新檔案，自動歸檔"}},
     ],
     actions={
         "cleanup": {"type": "callback", "handler": "ops.cleanup"},
@@ -41,8 +56,11 @@ path = pack_agent(
     },
     brain={
         "type": "llm",
+        "engine": "llama-server",
+        # 刻意設小：決策 payload 很短，省記憶體（模型原生支援 256K）
         "n_ctx": 4096,
-        "user_profile": "工程師，工作時間 9-18，偏好最少打擾；高風險動作必須先確認",
+        "learning": True,
+        "user_profile": "SRE/工程師，工作時間偏好最少打擾；高風險動作必須先確認",
     },
     weights_path=WEIGHTS,
 )
