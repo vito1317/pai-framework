@@ -8,13 +8,13 @@ version = "0.1.0"
 description = "Proactive AI Framework — event-driven, governed proactive agents with a GGUF-like .pai container format and self-finetuning"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "vito1317", email = "service@vito1317.com" }]
 keywords = ["proactive-ai", "agent", "llm", "gguf", "pai", "self-finetuning", "omni", "full-duplex"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -34,8 +34,8 @@ dev = ["build", "twine", "pytest"]
 [project.urls]
 Homepage = "https://github.com/vito1317/pai-framework"
 Repository = "https://github.com/vito1317/pai-framework"
-"Model: Gemma 4" = "https://huggingface.co/vito95311/gemma-guardian-pai"
-"Model: MiniCPM-o" = "https://huggingface.co/vito95311/minicpm-o-guardian-pai"
+"Gemma-4 model" = "https://huggingface.co/vito95311/gemma-guardian-pai"
+"MiniCPM-o model" = "https://huggingface.co/vito95311/minicpm-o-guardian-pai"
 
 [project.scripts]
 pai = "pai.__main__:main"
