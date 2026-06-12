@@ -1,6 +1,6 @@
 # PAI — Proactive AI Framework（主動式 AI 框架）
 
-一個通用、零依賴（純 Python 標準庫）、可直接運行的主動式 AI 框架原型，並內建 **PAI Protocol v1.1** 標準資料格式。
+一個通用、零依賴（純 Python 標準庫）、可直接運行的主動式 AI 框架原型，並內建 **PAID Protocol v1.2**（Proactive Agent Infrastructure with Dynamic-finetuning） 標準資料格式。
 
 核心理念：從「被動式 AI（你下指令它才做事）」轉為「事件驅動 + 持續感知 + 受治理的主動行為」。
 
@@ -45,7 +45,7 @@ pip install paigent          # PyPI 發佈名為 paigent；import 仍是 `import
 └───────────────────────────────────────────────┘
                     ↓
 ┌─ 記憶層 Memory（SQLite）──────────────────────┐
-│ 事件 / 意圖 / 結果 / 回饋 / PAI Protocol 紀錄   │ → 回饋迴圈調節未來主動性
+│ 事件 / 意圖 / 結果 / 回饋 / PAID Protocol 紀錄   │ → 回饋迴圈調節未來主動性
 └───────────────────────────────────────────────┘
 ```
 
@@ -68,7 +68,7 @@ urgency × confidence > interruption_cost  才允許打擾使用者
 
 風險高的動作用 `action_max_levels` 鎖死上限（例：寄信最多 ASK，永不自動寄出）。
 
-## PAI Protocol v1.1（標準資料格式）
+## PAID Protocol v1.2（標準資料格式）
 
 每次主動行為產生一份 6 層 JSON 紀錄（存入 SQLite，可直接對外交換）：
 

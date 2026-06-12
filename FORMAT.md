@@ -56,7 +56,7 @@
 |---|---|
 | `.gguf` | 打包「模型權重」 |
 | `.pai` | 打包「整個主動式 agent」（行為+治理+記憶，可內嵌 .gguf） |
-| `.pai.json` | 單筆 PAI Protocol 行為紀錄（執行期事件，文字 JSON） |
+| `.pai.json` | 單筆 PAID Protocol 行為紀錄（執行期事件，文字 JSON） |
 
 ## API
 

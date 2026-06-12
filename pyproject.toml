@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paigent"
-version = "0.1.1"
+version = "0.1.3"
 description = "Proactive AI Framework — event-driven, governed proactive agents with a GGUF-like .pai container format and self-finetuning"
 readme = "README.md"
 requires-python = ">=3.9"

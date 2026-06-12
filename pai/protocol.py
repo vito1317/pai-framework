@@ -23,7 +23,9 @@ from typing import Optional
 
 from .core import AutonomyLevel, Event, Intent
 
-PAI_PROTOCOL_VERSION = "1.1"
+PROTOCOL_NAME = "PAID"            # Proactive Agent Infrastructure with Dynamic-finetuning
+PAID_PROTOCOL_VERSION = "1.2"
+PAI_PROTOCOL_VERSION = PAID_PROTOCOL_VERSION   # 向後相容別名（舊匯入路徑仍可用）
 
 # 自主等級 → 交付模式 對應
 LEVEL_TO_DELIVERY = {
@@ -43,10 +45,14 @@ def build_record(
     execution: Optional[dict] = None,
     user_feedback: str = "pending",
 ) -> dict:
-    """組裝一份符合 PAI Protocol 的完整紀錄。"""
+    """組裝一份符合 PAID Protocol（Proactive Agent Infrastructure with
+    Dynamic-finetuning）的完整紀錄。寫出 paid_protocol_version，並鏡像舊
+    pai_protocol_version 欄位讓 < 0.1.3 的讀取器仍可驗證。"""
     return {
-        "pai_protocol_version": PAI_PROTOCOL_VERSION,
-        "record_id": f"pai_{datetime.now().strftime('%Y%m%d')}_{uuid.uuid4().hex[:6]}",
+        "paid_protocol_version": PAID_PROTOCOL_VERSION,
+        "pai_protocol_version": PAID_PROTOCOL_VERSION,   # 向後相容鏡像
+        "protocol": PROTOCOL_NAME,
+        "record_id": f"paid_{datetime.now().strftime('%Y%m%d')}_{uuid.uuid4().hex[:6]}",
         "timestamp": datetime.now(timezone.utc).isoformat(),
 
         "1_perception": {
@@ -98,13 +104,15 @@ def save_pai(record: dict, directory: str = ".") -> str:
 
 
 def load_pai(path: str) -> dict:
-    """讀取 .pai.json 檔案並做基本格式驗證。"""
+    """讀取 .paid.json / .pai.json 檔案並做基本格式驗證（新舊版本皆接受）。"""
     with open(path, encoding="utf-8") as f:
         record = json.load(f)
-    required = {"pai_protocol_version", "record_id", "timestamp",
-                "1_perception", "2_context", "3_anticipation",
-                "4_execution", "5_delivery", "6_adaptation"}
+    # 版本欄位接受 paid_（新）或 pai_（舊鏡像）任一
+    if not ({"paid_protocol_version", "pai_protocol_version"} & record.keys()):
+        raise ValueError("Invalid record: missing paid_protocol_version")
+    required = {"record_id", "timestamp", "1_perception", "2_context",
+                "3_anticipation", "4_execution", "5_delivery", "6_adaptation"}
     missing = required - record.keys()
     if missing:
-        raise ValueError(f"Invalid .pai file, missing keys: {sorted(missing)}")
+        raise ValueError(f"Invalid .paid file, missing keys: {sorted(missing)}")
     return record

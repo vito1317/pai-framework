@@ -143,7 +143,7 @@ class MiniCPMoBrain:
                                 temperature=0.2)
         if isinstance(text, tuple):   # (text, audio) 形式時取文字
             text = text[0]
-        return _parse_intents(text, self.available_actions)
+        return parse_intents(text, self.available_actions)
 
     def _decide_server(self, event: Event, context: dict) -> list[Intent]:
         import urllib.request

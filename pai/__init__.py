@@ -8,7 +8,7 @@ from .brain import RuleBrain, LLMBrain, Rule
 from .policy import ProactivityPolicy
 from .actions import ConsoleNotifier, WebhookNotifier, CallbackAction
 from .memory import Memory
-from .protocol import PAI_PROTOCOL_VERSION, build_record, to_json, save_pai, load_pai
+from .protocol import PAI_PROTOCOL_VERSION, PAID_PROTOCOL_VERSION, PROTOCOL_NAME, build_record, to_json, save_pai, load_pai
 from .paifile import PaiWriter, PaiReader, pack_agent, load_agent, bake_adapter_into_pai
 from .finetune import (
     AdapterStore, EvalGate, SelfFinetuneManager,
@@ -29,7 +29,7 @@ __all__ = [
     "ProactivityPolicy",
     "ConsoleNotifier", "WebhookNotifier", "CallbackAction",
     "Memory",
-    "PAI_PROTOCOL_VERSION", "build_record", "to_json", "save_pai", "load_pai",
+    "PAI_PROTOCOL_VERSION", "PAID_PROTOCOL_VERSION", "PROTOCOL_NAME", "build_record", "to_json", "save_pai", "load_pai",
     "PaiWriter", "PaiReader", "pack_agent", "load_agent", "load_runtime",
     "ReflectiveMemory", "HashingEmbedder", "EmbeddingClient",
     "bake_adapter_into_pai", "AdapterStore", "EvalGate", "SelfFinetuneManager",

@@ -71,7 +71,7 @@
           ──> 每次 promote 寫入稽核紀錄（誰、何時、用哪批資料、指標多少）
 ```
 
-Eval set 從 PAI Protocol 紀錄自動累積（使用者明確 accepted/rejected 的情境就是天然標註）。閘門條件可設保守，例如「新 adapter 決策正確率 ≥ 現役 + 2%，且打擾精準度不下降」。
+Eval set 從 PAID Protocol 紀錄自動累積（使用者明確 accepted/rejected 的情境就是天然標註）。閘門條件可設保守，例如「新 adapter 決策正確率 ≥ 現役 + 2%，且打擾精準度不下降」。
 
 這層防止「越學越壞」——這正是線上學習最大的坑。
 
